@@ -251,6 +251,16 @@ export function SpringyBar({
    * travelling, the label stays on the handle and fades out where it is, and
    * the hover label is held back until it has gone.
    */
+  /*
+   * What is doing the pointing.
+   *
+   * A cursor is a pixel and sits where you can see it; a fingertip is about
+   * forty-four pixels across and sits on top of the thing it is touching. The
+   * label has to clear the finger, so on touch it lifts far enough to be
+   * outside the contact patch — sixteen pixels is right under a mouse and
+   * completely hidden under a thumb.
+   */
+  const [touching, setTouching] = useState(false);
   const [closing, setClosing] = useState(false);
   const closeAt = useRef(0);
   const onHandle = useRef(false);
@@ -336,8 +346,15 @@ export function SpringyBar({
      */
     if (bubble.current) {
       const hold = frozen.current;
-      const bx = hold ? hold.x : onHandle.current ? x : askPx.current;
+      const raw = hold ? hold.x : onHandle.current ? x : askPx.current;
       const by = hold ? hold.y : onHandle.current ? y : mid;
+      /*
+       * Kept inside the bar. The stack is centred on the point in question, so
+       * at either end half of it would hang past the control and, on a phone,
+       * off the screen — a thumbnail you cannot see is worse than none.
+       */
+      const half = (bubble.current.firstElementChild?.clientWidth ?? 0) / 2;
+      const bx = clamp(raw, Math.min(half, w / 2), Math.max(w - half, w / 2));
       if (!hold) lastAt.current = { x: bx, y: by };
       bubble.current.style.transform = `translate(${bx.toFixed(1)}px, ${by.toFixed(1)}px)`;
     }
@@ -452,13 +469,22 @@ export function SpringyBar({
     width.current = r.width;
     grab.current = { x: e.clientX, v: ((e.clientX - r.left) / r.width) * max, t: performance.now() };
     setAsking(null);            // the cursor stops asking the moment it takes hold
+    setTouching(e.pointerType === 'touch');
     setDragging(true);
     onDragChange?.(true);
     /* Capture is worth having and not worth dying for: a browser that refuses
        it — a stale pointer id, a non-primary touch — must not take the seek
        down with it, which is what an uncaught throw here did. */
     try { el.setPointerCapture?.(e.pointerId); } catch { /* drag still works */ }
-    if (e.pointerType !== 'touch') lockPage(true);
+    /*
+     * Only a finger needs the page held.
+     *
+     * A mouse drag cannot scroll the page, so locking the scroller during one
+     * bought nothing and cost something visible: overflow: hidden takes the
+     * scrollbar away, the content jumps the width of it, and the bar moves
+     * under the cursor that is dragging it. Touch is the case that needs the
+     * lock, and it takes it on commitment, not on contact.
+     */
     seekTo(grab.current.v);
     run();
   };
@@ -567,7 +593,7 @@ export function SpringyBar({
 
   return (
     <div
-      className={['sbar', container ? 'sbar-shell' : '', dragging ? 'sbar-held' : '', className].filter(Boolean).join(' ')}
+      className={['sbar', container ? 'sbar-shell' : '', dragging ? 'sbar-held' : '', touching ? 'sbar-touch' : '', className].filter(Boolean).join(' ')}
       style={container
         ? {
             background: containerFill,
@@ -719,6 +745,14 @@ export const springyBarCss = `
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   transform: translate(-50%, calc(-100% - 16px));
 }
+/*
+ * Above the finger, not under it.
+ *
+ * A fingertip covers roughly forty-four pixels, and the handle is in the
+ * middle of it: a label sixteen pixels up is inside the contact patch and
+ * invisible for the whole drag. Fifty-six clears the thumb and the nail.
+ */
+.sbar-touch .sbar-tip-stack { transform: translate(-50%, calc(-100% - 56px)); }
 .sbar-tip-time {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px; font-variant-numeric: tabular-nums; letter-spacing: 0.04em;

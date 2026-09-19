@@ -4,7 +4,11 @@ A scrub bar with a string in it. Drag sideways to scrub, push up or down to get 
 
 One file, no dependencies, React 18+.
 
-**[Live examples, on video, audio and a phone →](https://davidbastian.black/?p=springy-bar-product)**
+![The bar being dragged: the string bends away from the finger, the label rides the handle, and it springs back on release](media/springy-bar.gif)
+
+*Dragging with `reach={44}` so the bend is legible in a GIF; the default is 20.*
+
+**[Live examples, on video and audio →](https://davidbastian.black/?p=springy-bar-product)**
 
 ```tsx
 import { SpringyBar, springyBarCss } from './SpringyBar';
@@ -14,6 +18,14 @@ import { SpringyBar, springyBarCss } from './SpringyBar';
 ```
 
 ---
+
+## Where it came from
+
+It started as [a study](https://davidbastian.black/?p=springy-bar) — a canvas sketch with a control panel, made to answer one question: what would a scrub bar feel like if it had physics in it. That is all a study has to do. It lived on a page of its own, it was fun to drag, and it was not usable by anyone.
+
+Two things made it worth turning into a component. The first is that the thing it does is not decoration: pushing the bar out of the way solves a real problem with scrub bars, and the bend turns out to be a natural display for scrub precision — a gesture iOS has had for a decade and has never shown anyone. The second is that a scrub bar is not a rare control. It is one of the few every person uses every day, which means an idea about it either ships as something a developer can drop into a player in one line, or it stays a demo that people say is nice and then never think about again.
+
+So the study stays where it is, as the sketch. This is the same idea rebuilt as a thing you can actually use: DOM and SVG instead of canvas, props instead of a panel, a real slider for screen readers, and gesture handling that does not fight the page it is on.
 
 ## Why
 
