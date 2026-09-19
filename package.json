@@ -1,0 +1,15 @@
+{
+  "name": "springy-bar",
+  "version": "0.1.0",
+  "description": "A scrub bar with a string in it: drag sideways to scrub, push up or down to get it out of the way — and the further you push, the finer it scrubs.",
+  "author": "David Bastian",
+  "license": "MIT",
+  "keywords": ["react", "scrubber", "slider", "seek", "video", "audio", "player", "spring"],
+  "type": "module",
+  "main": "src/SpringyBar.tsx",
+  "types": "src/SpringyBar.tsx",
+  "files": ["src", "README.md", "LICENSE"],
+  "peerDependencies": { "react": ">=18" },
+  "repository": { "type": "git", "url": "git+https://github.com/davidbastian/springy-bar.git" },
+  "homepage": "https://davidbastian.black/?p=springy-bar-product"
+}
