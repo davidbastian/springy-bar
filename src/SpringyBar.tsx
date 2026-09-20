@@ -144,6 +144,26 @@ export interface SpringyBarProps {
    * a phone that is already decoding video.
    */
   containerBlur?: number;
+  /*
+   * A level meter beside the play button: 0 to 1, or left out for none.
+   *
+   * The component draws it and nothing else — it cannot measure sound it does
+   * not own, so the number comes from whoever owns the audio. Four bars, each
+   * with its own weighting, which is enough to read as level rather than as
+   * decoration: an equaliser with twenty bars on a scrub bar is a visualiser,
+   * and a visualiser is a different product.
+   */
+  meter?: number;
+  /*
+   * Give onMute and the meter becomes the mute button.
+   *
+   * It is the obvious place for it: the thing that shows you there is sound is
+   * the thing you reach for to stop it, and a player that has a level and a
+   * separate speaker icon has said the same thing twice. Muted, the bars lie
+   * flat — no slash, no second state to learn, just a level of nothing.
+   */
+  muted?: boolean;
+  onMute?: () => void;
   /** Anything else: volume, speed, a fullscreen button. Sits on the right. */
   actions?: ReactNode;
   /** For screen readers, when the bar is not obviously a player. */
@@ -218,6 +238,9 @@ export function SpringyBar({
   track = 'rgba(0,0,0,0.16)',
   weight = 3.5,
   showTime = false,
+  meter,
+  muted = false,
+  onMute,
   tip = false,
   hover = true,
   preview,
@@ -521,21 +544,14 @@ export function SpringyBar({
     const dy = e.clientY - (r.top + room / 2);
 
     /*
-     * What the finger meant, decided once.
+     * The page is held for as long as the string is.
      *
-     * A flick straight down the page is someone reading, and it has to scroll:
-     * six pixels sideways, or a press that was held before it moved, is
-     * someone taking hold of the bar. The hold matters because pushing the
-     * string down without scrubbing is a real gesture here — it is how you set
-     * the precision before you move — and it looks exactly like a scroll for
-     * its first few pixels. A sixth of a second of stillness tells them apart.
+     * This used to wait and guess — a flick was a scroll, six pixels sideways
+     * was a scrub — because touch-action: pan-y had left the decision with the
+     * browser. It no longer has it: the track takes the gesture on contact, so
+     * the only thing left to do is stop the page moving underneath.
      */
-    if (e.pointerType === 'touch' && !locked.current) {
-      const held = performance.now() - g.t > 160;
-      const sideways = Math.abs(dx) >= 6 && Math.abs(dy) < Math.abs(dx) * 1.6;
-      if (!held && !sideways) return;
-      lockPage(true);
-    }
+    if (e.pointerType === 'touch' && !locked.current) lockPage(true);
 
     /*
      * Rubber, not rope: past the reach the string keeps giving, but less and
@@ -557,6 +573,21 @@ export function SpringyBar({
     const fine = 1 / (1 + away * (Math.max(1, precision) - 1));
     seekTo(g.v + (dx / Math.max(width.current, 1)) * max * fine);
     run();
+  };
+
+  /*
+   * A finger down anywhere on the control holds the page still.
+   *
+   * Belt and braces next to touch-action: a scroller that has already begun
+   * moving cannot be stopped by a property, so it is stopped by hand, and
+   * released the moment the finger lifts. Only for touch — locking a desktop
+   * scroller takes the scrollbar away and shifts the layout.
+   */
+  const touchOn = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch') lockPage(true);
+  };
+  const touchOff = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch' && !grab.current) lockPage(false);
   };
 
   const up = () => {
@@ -594,6 +625,9 @@ export function SpringyBar({
   return (
     <div
       className={['sbar', container ? 'sbar-shell' : '', dragging ? 'sbar-held' : '', touching ? 'sbar-touch' : '', className].filter(Boolean).join(' ')}
+      onPointerDown={touchOn}
+      onPointerUp={touchOff}
+      onPointerCancel={touchOff}
       style={container
         ? {
             background: containerFill,
@@ -683,6 +717,22 @@ export function SpringyBar({
       </div>
 
       {showTime && <span className="sbar-time">{duration ? `-${clock(max - shown)}` : ''}</span>}
+
+      {meter !== undefined && (() => {
+        const bars = [0.55, 1, 0.75, 0.35].map((k, i) => (
+          <i key={i} style={{ transform: `scaleY(${(0.18 + (muted ? 0 : clamp(meter, 0, 1)) * k * 0.95).toFixed(3)})` }} />
+        ));
+        return onMute
+          ? (
+            <button
+              className={muted ? 'sbar-meter sbar-meter-off' : 'sbar-meter'}
+              onClick={onMute}
+              aria-label={muted ? 'Unmute' : 'Mute'}
+              aria-pressed={muted}
+            >{bars}</button>
+          )
+          : <span className="sbar-meter" aria-hidden="true">{bars}</span>;
+      })()}
       {actions && <div className="sbar-actions">{actions}</div>}
     </div>
   );
@@ -707,16 +757,47 @@ export const springyBarCss = `
 .sbar {
   display: flex; align-items: center; gap: 12px; width: 100%;
   user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  /*
+   * The whole control claims touch, not only the string.
+   *
+   * The track was the only part that did, which left the pill's padding, the
+   * play button, the clock and the meter as places where a finger landing
+   * slightly off target gave the gesture to the page — and the drag then never
+   * started. Everything inside the component is the component. A mouse is
+   * unaffected: touch-action means nothing to a pointer that cannot pan.
+   */
+  touch-action: none;
 }
 /* The pill's own box: everything visual about it comes from props, so this
    only has to stop the padding from collapsing the flex row. */
 .sbar-shell { box-sizing: border-box; }
 .sbar-track {
   position: relative; flex: 1; min-width: 0; cursor: grab;
-  touch-action: pan-y;               /* the page keeps vertical flicks */
+  /*
+   * The control claims the gesture.
+   *
+   * pan-y let the browser decide, and on a phone it often decided first: it
+   * began a scroll, fired pointercancel, and the drag died before it started —
+   * which is why the first touch did nothing and the second one worked. A
+   * slider cannot share its gestures. It is forty pixels tall in a page of
+   * text, so a reader still scrolls by touching anywhere else.
+   */
+  touch-action: none;
   -webkit-tap-highlight-color: transparent;
 }
 .sbar-held .sbar-track { cursor: grabbing; }
+/*
+ * A finger's worth of target.
+ *
+ * The bar can be as short as twenty-four pixels, and a fingertip is about
+ * forty-four. The hit area is extended past the box in both directions
+ * without touching the layout, so the first touch lands on the control rather
+ * than beside it.
+ */
+.sbar-track::before {
+  content: ''; position: absolute; left: 0; right: 0;
+  top: -10px; bottom: -10px;
+}
 .sbar-track:focus-visible { outline: none; }
 .sbar-track:focus-visible svg { filter: drop-shadow(0 0 0 2px rgba(0,0,0,0.25)); }
 .sbar-track svg { display: block; overflow: visible; }
@@ -769,6 +850,32 @@ export const springyBarCss = `
   display: block; width: auto; height: auto;
   max-width: 132px; max-height: 96px;
 }
+
+/*
+ * Four bars, scaled from the middle.
+ *
+ * scaleY on a fixed box rather than a changing height: a height animated sixty
+ * times a second is sixty layouts a second, and a transform is none. The
+ * transition is short enough to smooth the jitter out of a level and too short
+ * to lag behind the sound.
+ */
+.sbar-meter {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 2.5px; height: 18px;
+  padding: 0; border: none; background: none; color: inherit;
+}
+button.sbar-meter { cursor: pointer; min-width: 22px; justify-content: center; }
+/* A bigger target than it looks: four two-pixel bars is not something to aim
+   a thumb at, and the meter is now a button. */
+button.sbar-meter { position: relative; }
+button.sbar-meter::before { content: ''; position: absolute; inset: -12px -10px; }
+.sbar-meter-off i { opacity: 0.3; }
+.sbar-meter i {
+  display: block; width: 2.5px; height: 100%;
+  background: currentColor; opacity: 0.55; border-radius: 2px;
+  transform-origin: center;
+  transition: transform 0.09s linear;
+}
+@media (prefers-reduced-motion: reduce) { .sbar-meter i { transition: none; } }
 
 .sbar-time {
   flex: 0 0 auto;

@@ -121,6 +121,8 @@ const [playing, setPlaying] = useState(false);
 | `containerRadius` | `number` | — | Corner radius of the pill. Left out, it is a capsule at any height. |
 | `containerBlur` | `number` | `14` | How much of what is behind the pill is blurred. `0` for none — worth turning off over flat backgrounds, and the first thing to drop on a phone already decoding video. |
 | `showTime` | `boolean` | `false` | Elapsed on the left, remaining on the right. |
+| `meter` | `number` | — | A four-bar level on the right, 0 to 1. The component draws it; the number comes from whoever owns the audio. |
+| `muted` / `onMute` | `boolean` / `() => void` | — | Give `onMute` and the meter becomes the mute button. Muted, its bars lie flat. |
 | `tip` | `boolean` | `false` | A label above the handle while you drag. It rides the string, so it travels with the bend. |
 | `preview` | `(v: number) => ReactNode` | — | Anything above that label — a frame, a chapter name, a marker. Called as often as the finger moves, so keep it cheap. |
 | `actions` | `ReactNode` | — | Your own controls, on the right. |
@@ -148,7 +150,9 @@ const fine = 1 / (1 + away * (precision - 1));
 seek(grabbedAt + (dx / width) * duration * fine);
 ```
 
-**The scroll**, on a phone: a bar tall enough to push is also a bar tall enough to trap the page. Neither `touch-action` nor `preventDefault` can be changed once the browser has committed to a scroll, so the component waits to see what the finger is doing — a flick down the page is a scroll, six pixels sideways is a scrub — and locks the scroller itself, releasing it when the finger lifts.
+**The gesture**, on a phone: a slider cannot share its gestures. With `touch-action: pan-y` the browser could claim the first touch as a scroll and fire `pointercancel`, which killed the drag before it began — the first touch did nothing and the second one worked. The whole control takes the gesture now (`touch-action: none`, on the container as well as the track, because the padding, the play button and the meter are all places a finger lands slightly off target), and the page is held by hand for as long as a finger is down, since a scroller already moving cannot be stopped by a property. All of it is gated on touch: a mouse never locks the page, and so never loses its scrollbar mid-drag.
+
+**The length**: a phone browser treats `preload` as a suggestion and often fetches nothing until the first tap, so `duration` reads 0 and there is nothing to scrub across. Whatever owns the media should call `load()` and listen for `durationchange` as well as `loadedmetadata` — the demos do — and the bar refuses to seek while the length is unknown rather than silently landing on the first frame.
 
 ## Accessibility
 
